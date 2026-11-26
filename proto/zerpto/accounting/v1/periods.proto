@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+// OWNED BY THE ACCOUNTING SERVICE. See `accounts.proto` for the conventions of
+// this package.
+package zerpto.accounting.v1;
+
+// A tenant's accounting periods.
+service Periods {
+  // Whether the period a date falls in still accepts postings, asked before a
+  // dated document is posted. A date whose period does not exist yet is not
+  // refused: accounting opens that period (a calendar month) and answers that it
+  // is open. Opening it is the only change this call can make, so it is safe to
+  // repeat and safe to call concurrently. It reserves nothing: the period can be
+  // closed right after the answer.
+  rpc GetPeriodForDate(GetPeriodForDateRequest) returns (GetPeriodForDateResponse);
+}
+
+// Asks about the period of one date.
+message GetPeriodForDateRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // The posting date, `YYYY-MM-DD`. A value that is not a date is a caller bug,
+  // answered with INVALID_ARGUMENT.
+  string date = 2;
+}
+
+// The period of the date.
+message GetPeriodForDateResponse {
+  // Whether the period accepts postings.
+  PeriodStatus status = 1;
+}
+
+// Whether a period accepts postings.
+enum PeriodStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  PERIOD_STATUS_UNSPECIFIED = 0;
+  // Documents dated in the period can be posted.
+  PERIOD_STATUS_OPEN = 1;
+  // The period is closed: nothing dated in it can be posted.
+  PERIOD_STATUS_CLOSED = 2;
+}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+// OWNED BY THE IAM SERVICE. The source of truth lives in this repo
+// (com.zerpto.proto); the IAM service changes it here and implements the
+// server. Every other service uses only the generated client.
+package zerpto.iam.v1;
+
+// Seat usage of a tenant. Billing calls it to enforce the seat limit when a
+// tenant subscribes or adds seats.
+service Seats {
+  // How many seats a tenant uses right now. Answered from live data (no
+  // cache). A tenant IAM does not know is a normal answer (0), not a gRPC
+  // error.
+  rpc GetSeatsInUse(GetSeatsInUseRequest) returns (GetSeatsInUseResponse);
+}
+
+// Asks for the seats a tenant uses.
+message GetSeatsInUseRequest {
+  // Id of the tenant (plain lowercase UUID, no `ten-` prefix).
+  string tenant_id = 1;
+}
+
+// The seats a tenant uses.
+message GetSeatsInUseResponse {
+  // Seats in use: active members (not deactivated) plus pending invitations
+  // that have not been accepted yet. Whole number, 0 or more. 0 when the
+  // tenant is unknown.
+  int64 seats_in_use = 1;
+}

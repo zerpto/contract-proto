@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  buf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags are needed for `buf breaking`
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Lint
+        run: buf lint
+      - name: Breaking changes against the last tag
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+          # On a tag build HEAD is the tag itself: compare with the one before it.
+          if [ -n "$last" ] && [ "$(git rev-parse "$last^{commit}")" = "$(git rev-parse HEAD)" ]; then
+            last=$(git describe --tags --abbrev=0 --match 'v*' "$last^" 2>/dev/null || true)
+          fi
+          if [ -z "$last" ]; then
+            echo "No previous tag: skipping buf breaking."
+            exit 0
+          fi
+          echo "Comparing against $last"
+          buf breaking --against ".git#tag=$last"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build with no features
+        run: cargo build --no-default-features
+      - name: Build each feature alone
+        run: |
+          for f in accounting billing health iam inventory order partner reference-data; do
+            echo "::group::feature $f"
+            cargo build --no-default-features --features "$f"
+            echo "::endgroup::"
+          done
+      - name: Build with all features
+        run: cargo build --all-features

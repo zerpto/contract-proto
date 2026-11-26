@@ -1,0 +1,39 @@
+[package]
+name = "zerpto-proto"
+version = "0.5.0"
+edition = "2021"
+publish = false
+description = "Generated gRPC code for the Zerpto service-to-service contracts (client and server)."
+
+[features]
+default = []
+# One feature per service package. `common` is always compiled.
+# `zerpto.accounting.v1`
+accounting = []
+# `zerpto.billing.v1`
+billing = []
+# `zerpto.health.v1`
+health = []
+# `zerpto.iam.v1`
+iam = []
+# `zerpto.inventory.v1`
+inventory = []
+# `zerpto.order.v1`
+order = []
+# `zerpto.partner.v1`
+partner = []
+# `zerpto.referencedata.v1`
+reference-data = []
+# Every service.
+all = ["accounting", "billing", "health", "iam", "inventory", "order", "partner", "reference-data"]
+
+[dependencies]
+# Same versions as zerpto-core.
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
+# For `google.protobuf.Timestamp` in the generated code.
+prost-types = "0.14"
+
+[build-dependencies]
+tonic-prost-build = "0.14"

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// OWNED BY THE IAM SERVICE. The source of truth lives in this repo
+// (com.zerpto.proto); the IAM service changes it here and implements the
+// server. Every other service uses only the generated client.
+package zerpto.iam.v1;
+
+// Phone verification state of a user. Billing calls it to allow one free trial
+// per verified phone, without ever receiving the phone number.
+service PhoneVerifications {
+  // Whether a user has a verified phone number, and a stable hash of it.
+  // Answered from live data (no cache). A user IAM does not know is a normal
+  // answer (verified false, empty hash), not a gRPC error.
+  rpc GetPhoneVerification(GetPhoneVerificationRequest) returns (GetPhoneVerificationResponse);
+}
+
+// Asks for the phone verification state of a user.
+message GetPhoneVerificationRequest {
+  // Id of the user (plain lowercase UUID, no `usr-` prefix).
+  string user_id = 1;
+}
+
+// The phone verification state of a user.
+message GetPhoneVerificationResponse {
+  // True when the user has a verified phone number. False when the phone is
+  // missing or unverified, or the user is unknown.
+  bool verified = 1;
+  // Stable lowercase hex hash of the normalized phone number. The same number
+  // always gives the same hash, so callers can compare it (billing uses it to
+  // allow one free trial per phone). Empty when the user has no phone. It is
+  // never the phone number itself.
+  string phone_hash = 2;
+}

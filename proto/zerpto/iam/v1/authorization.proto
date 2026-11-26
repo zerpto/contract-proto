@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+// OWNED BY THE IAM SERVICE. The source of truth lives in this repo
+// (com.zerpto.proto); the IAM service changes it here and implements the
+// server. Every other service uses only the generated client.
+package zerpto.iam.v1;
+
+service Authorization {
+  // Whether a user may do something in a tenant. Answered from live data (no
+  // cache), so a role change applies on the next call.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+}
+
+message AuthorizeRequest {
+  // API id of the user (the token's `pid`) and of the tenant.
+  string user_id = 1;
+  string tenant_id = 2;
+  // Allowed when the user holds ANY of these keys (or `*`),
+  // e.g. "expenses.read", "expenses.manage".
+  repeated string permission_keys = 3;
+}
+
+message AuthorizeResponse {
+  Decision decision = 1;
+  // Set when decision is PLAN_REQUIRED: the paid feature that is locked.
+  string feature_key = 2;
+  string feature_name = 3;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOWED = 1;
+  // The user holds none of the keys, or is not a member of the tenant.
+  DECISION_DENIED = 2;
+  // The user holds a key, but its feature is paid and the tenant is on the
+  // free plan or overdue.
+  DECISION_PLAN_REQUIRED = 3;
+  DECISION_ACCOUNT_DEACTIVATED = 4;
+}

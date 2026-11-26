@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// Types shared by more than one service. Add a type here only when two or more
+// services need the same one, and never for a type a single service owns. Wire
+// rules (UUID string ids, decimal strings, Timestamp) are in AGENTS.md.
+package zerpto.common.v1;
+
+// A postal address as its owner stored it (inventory warehouses, partner
+// vendors). The region fields were filled in from the region tree when the
+// address was saved; the reader does not check or complete them.
+message Address {
+  // Plain UUID of the deepest region picked (owned by reference-data). Absent
+  // when the address was typed by hand.
+  optional string region_id = 1;
+  // Street, number and other detail below the village. Absent when not given.
+  optional string line1 = 2;
+  // Second line of that detail. Absent when not given.
+  optional string line2 = 3;
+  // ISO 3166-1 alpha-2 country code, for example "ID". Absent when not given.
+  optional string country = 4;
+  // Name of the province. Absent when not given.
+  optional string province = 5;
+  // Name of the district. Absent when not given.
+  optional string district = 6;
+  // Name of the sub-district. Absent when not given.
+  optional string sub_district = 7;
+  // Name of the village. Absent when not given.
+  optional string village = 8;
+  // Postal code. Absent when not given.
+  optional string postal_code = 9;
+}

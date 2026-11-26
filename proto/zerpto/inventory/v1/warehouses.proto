@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// OWNED BY THE INVENTORY SERVICE. See `items.proto` for the conventions of this
+// package.
+package zerpto.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+import "zerpto/common/v1/common.proto";
+
+// Lookups of a tenant's warehouses.
+service Warehouses {
+  // Whether one warehouse of a tenant exists and can take new documents, and
+  // what it is. Answered from live data and changes nothing.
+  rpc GetWarehouse(GetWarehouseRequest) returns (GetWarehouseResponse);
+}
+
+// Asks about one warehouse.
+message GetWarehouseRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUID of the warehouse.
+  string warehouse_id = 2;
+}
+
+// What the tenant's warehouse is.
+message GetWarehouseResponse {
+  // Whether the warehouse can be used.
+  WarehouseStatus status = 1;
+  // The warehouse. Set when `status` is active or archived, absent when it is
+  // WAREHOUSE_STATUS_NOT_FOUND.
+  Warehouse warehouse = 2;
+}
+
+// A warehouse of a tenant.
+message Warehouse {
+  // Plain UUID of the warehouse.
+  string warehouse_id = 1;
+  // The tenant's own code for it, unique in the tenant.
+  string code = 2;
+  // Name of the warehouse.
+  string name = 3;
+  // Where it is. Absent when no address was given.
+  zerpto.common.v1.Address address = 4;
+  // When the warehouse was created.
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// Whether a warehouse can be used.
+enum WarehouseStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  WAREHOUSE_STATUS_UNSPECIFIED = 0;
+  // Exists in the tenant and can take new documents.
+  WAREHOUSE_STATUS_ACTIVE = 1;
+  // Exists in the tenant but is archived: no new documents.
+  WAREHOUSE_STATUS_ARCHIVED = 2;
+  // The tenant has no warehouse with this id.
+  WAREHOUSE_STATUS_NOT_FOUND = 3;
+}

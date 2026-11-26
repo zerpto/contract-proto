@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+// OWNED BY THE ACCOUNTING SERVICE. Accounting owns the chart of accounts; other
+// services (order first) store the plain UUID and ask whether it can be used.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `acc-` and `ten-`
+//     prefixes exist only on HTTP and never appear here.
+//   - An unknown id is a normal answer, not a "not found" error. gRPC status
+//     codes are for infrastructure failures only, and a caller must fail closed
+//     on those.
+package zerpto.accounting.v1;
+
+// Lookups in a tenant's chart of accounts.
+service Accounts {
+  // The accounts of a tenant among the ids asked for, so a document's lines can
+  // be checked in one call. Answered from live data and changes nothing.
+  rpc BatchGetAccounts(BatchGetAccountsRequest) returns (BatchGetAccountsResponse);
+}
+
+// Asks about several accounts.
+message BatchGetAccountsRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUIDs of the accounts, without duplicates. At most 500.
+  repeated string account_ids = 2;
+}
+
+// The accounts found.
+message BatchGetAccountsResponse {
+  // One entry per id the tenant has, in no particular order. An id the tenant
+  // does not have is left out.
+  repeated Account accounts = 1;
+}
+
+// What a caller needs to know about an account.
+message Account {
+  // Plain UUID of the account.
+  string account_id = 1;
+  // True when journal lines can be booked to it: it is active and not a
+  // grouping account.
+  bool accepts_postings = 2;
+}

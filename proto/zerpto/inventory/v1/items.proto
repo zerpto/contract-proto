@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+// OWNED BY THE INVENTORY SERVICE. Inventory owns the item catalogue; other
+// services (order first) store the plain UUID and ask whether it can be used.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `itm-`, `acc-` and `ten-`
+//     prefixes exist only on HTTP and never appear here.
+//   - An unknown id is a normal answer, not a "not found" error. gRPC status
+//     codes are for infrastructure failures only, and a caller must fail closed
+//     on those.
+package zerpto.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Lookups of a tenant's items.
+service Items {
+  // The items of a tenant among the ids asked for, so a document's lines can be
+  // checked in one call. Answered from live data and changes nothing.
+  rpc BatchGetItems(BatchGetItemsRequest) returns (BatchGetItemsResponse);
+}
+
+// Asks about several items.
+message BatchGetItemsRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUIDs of the items, without duplicates. At most 500.
+  repeated string item_ids = 2;
+}
+
+// The items found.
+message BatchGetItemsResponse {
+  // One entry per id the tenant has, in no particular order. An id the tenant
+  // does not have is left out.
+  repeated Item items = 1;
+}
+
+// What a caller needs to know about an item.
+message Item {
+  // Plain UUID of the item.
+  string item_id = 1;
+  // Whether the item can be used on new documents.
+  ItemStatus status = 2;
+  // Plain UUID of the account a purchase of this item is booked to (owned by
+  // accounting). Absent when the item has none.
+  optional string purchase_account_id = 3;
+  // Plain UUID of the account a sale of this item is booked to (owned by
+  // accounting). Absent when the item has none.
+  optional string sales_account_id = 4;
+  // True when inventory tracks a quantity for this item, so selling it needs
+  // stock.
+  bool is_stocked = 5;
+  // The tenant's stock keeping unit code of the item.
+  string sku = 6;
+  // Name of the item.
+  string name = 7;
+  // Longer text about the item. Absent when there is none.
+  optional string description = 8;
+  // Whether it is goods or a service.
+  ItemType item_type = 9;
+  // Base unit, for example "pcs". Quantities on documents and in stock are
+  // counted in it. Absent when the item has none.
+  optional string unit = 10;
+  // Other units the item is bought or sold in. The base unit is not repeated.
+  repeated ItemUnit units = 11;
+  // Plain UUID of the warehouse used when a document names none. Absent when
+  // the item has none.
+  optional string default_warehouse_id = 12;
+  // Selling price of one base unit. Absent when none is set.
+  Money sales_price = 13;
+  // Buying price of one base unit. Absent when none is set.
+  Money purchase_price = 14;
+  // Plain UUID of the item's tax rate (owned by tax). Absent when it has none.
+  optional string tax_rate_id = 15;
+  // When the item was created.
+  google.protobuf.Timestamp created_at = 16;
+  // When the item was last changed.
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// Another unit of an item, such as a box of twelve pieces.
+message ItemUnit {
+  // Name of the unit, for example "box".
+  string unit = 1;
+  // How many base units one of it holds, a decimal string with two decimals,
+  // greater than zero.
+  string factor = 2;
+  // Selling price of one of this unit. Absent means the base price times
+  // `factor`.
+  Money sales_price = 3;
+  // Buying price of one of this unit. Absent means the base price times
+  // `factor`.
+  Money purchase_price = 4;
+}
+
+// An amount of money with its currency.
+message Money {
+  // The amount, a decimal string with two decimals, for example "65000.00".
+  string amount = 1;
+  // ISO 4217 code of the currency, for example "IDR".
+  string currency = 2;
+}
+
+// What kind of thing an item is.
+enum ItemType {
+  // Never sent on purpose. Treat it as an error in the server.
+  ITEM_TYPE_UNSPECIFIED = 0;
+  // A physical good; it can be stocked.
+  ITEM_TYPE_GOODS = 1;
+  // A service; it is never stocked.
+  ITEM_TYPE_SERVICE = 2;
+}
+
+// Whether an item can be used.
+enum ItemStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  ITEM_STATUS_UNSPECIFIED = 0;
+  // Can be used on new documents.
+  ITEM_STATUS_ACTIVE = 1;
+  // Kept for history; no new documents.
+  ITEM_STATUS_ARCHIVED = 2;
+}

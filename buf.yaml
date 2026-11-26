@@ -1,0 +1,20 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+  except:
+    # SERVICE_SUFFIX wants every service named `*Service`. Our services are
+    # `Health` and `Authorization`, and the service name is part of the wire
+    # path (`/zerpto.iam.v1.Authorization/Authorize`), so renaming them
+    # would break every deployed caller. Name new services `<Thing>` the same
+    # way for consistency.
+    #
+    # The package rules stay on: PACKAGE_VERSION_SUFFIX (`zerpto.<svc>.vN`) and
+    # PACKAGE_DIRECTORY_MATCH (directory = package) are exactly our layout, so
+    # none of them is dropped.
+    - SERVICE_SUFFIX
+breaking:
+  use:
+    - FILE

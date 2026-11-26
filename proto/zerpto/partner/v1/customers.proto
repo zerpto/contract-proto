@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// OWNED BY THE PARTNER SERVICE. See `vendors.proto` for the conventions of this
+// package.
+package zerpto.partner.v1;
+
+// Lookups of a tenant's customers.
+service Customers {
+  // Whether one customer of a tenant exists and can take new documents.
+  // Answered from live data and changes nothing.
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse);
+}
+
+// Asks about one customer.
+message GetCustomerRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUID of the customer.
+  string customer_id = 2;
+}
+
+// What the tenant's customer is.
+message GetCustomerResponse {
+  // Whether the customer can be used.
+  CustomerStatus status = 1;
+}
+
+// Whether a customer can be used.
+enum CustomerStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  CUSTOMER_STATUS_UNSPECIFIED = 0;
+  // Exists in the tenant and can take new documents.
+  CUSTOMER_STATUS_ACTIVE = 1;
+  // Exists in the tenant but is archived: no new documents.
+  CUSTOMER_STATUS_ARCHIVED = 2;
+  // The tenant has no customer with this id.
+  CUSTOMER_STATUS_NOT_FOUND = 3;
+}

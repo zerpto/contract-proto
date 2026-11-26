@@ -1,0 +1,6 @@
+# Workspace root so the crate can be used as a git dependency:
+#   zerpto-proto = { git = "<repo url>", tag = "v0.1.0", package = "zerpto-proto" }
+# The crate itself lives in `crate/`; the protos are in `proto/`.
+[workspace]
+members = ["crate"]
+resolver = "2"

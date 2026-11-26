@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+// OWNED BY THE INVENTORY SERVICE. See `items.proto` for the conventions of this
+// package.
+package zerpto.inventory.v1;
+
+// What a tenant holds.
+service Stock {
+  // The quantity on hand of several items, summed over all warehouses. What
+  // open orders already claim is not subtracted: the caller owns those orders.
+  // Answered from live data and changes nothing.
+  rpc BatchGetStockOnHand(BatchGetStockOnHandRequest) returns (BatchGetStockOnHandResponse);
+}
+
+// Asks for the stock of several items.
+message BatchGetStockOnHandRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUIDs of the items, without duplicates. At most 500.
+  repeated string item_ids = 2;
+}
+
+// The stock of the items asked for.
+message BatchGetStockOnHandResponse {
+  // At most one entry per item. An item with no stock, or unknown to the
+  // tenant, may be left out and counts as zero.
+  repeated StockOnHand stock = 1;
+}
+
+// The stock of one item.
+message StockOnHand {
+  // Plain UUID of the item.
+  string item_id = 1;
+  // Quantity on hand as a decimal string with two decimals, for example
+  // "12.00". It can be negative.
+  string quantity = 2;
+}

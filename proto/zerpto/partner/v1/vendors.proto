@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+// OWNED BY THE PARTNER SERVICE. Partner owns customers and vendors; other
+// services (order first) store the plain UUID and ask whether it can be used.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `vnd-` and `ten-`
+//     prefixes exist only on HTTP and never appear here.
+//   - A bad business answer (unknown, archived) is a status in the response.
+//     gRPC status codes are for infrastructure failures only, and a caller
+//     must fail closed on those.
+package zerpto.partner.v1;
+
+import "google/protobuf/timestamp.proto";
+import "zerpto/common/v1/common.proto";
+
+// Lookups of a tenant's vendors.
+service Vendors {
+  // Whether one vendor of a tenant exists and can take new documents.
+  // Answered from live data and changes nothing.
+  rpc GetVendor(GetVendorRequest) returns (GetVendorResponse);
+}
+
+// Asks about one vendor.
+message GetVendorRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUID of the vendor.
+  string vendor_id = 2;
+}
+
+// What the tenant's vendor is.
+message GetVendorResponse {
+  // Whether the vendor can be used.
+  VendorStatus status = 1;
+  // The vendor. Set when `status` is active or archived, absent when it is
+  // VENDOR_STATUS_NOT_FOUND.
+  Vendor vendor = 2;
+}
+
+// A vendor of a tenant.
+message Vendor {
+  // Plain UUID of the vendor.
+  string vendor_id = 1;
+  // The tenant's own reference code, unique in the tenant.
+  string code = 2;
+  // Name of the vendor.
+  string name = 3;
+  // Email address. Absent when not given.
+  optional string email = 4;
+  // Phone number. Absent when not given.
+  optional string phone = 5;
+  // Tax identification number (NPWP). Absent when not given.
+  optional string tax_id = 6;
+  // Postal address. Absent when none was given.
+  zerpto.common.v1.Address address = 7;
+  // Days the tenant has to pay the vendor's bills.
+  uint32 payment_terms_days = 8;
+  // When the vendor was created.
+  google.protobuf.Timestamp created_at = 9;
+  // When the vendor was last changed.
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// Whether a vendor can be used.
+enum VendorStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  VENDOR_STATUS_UNSPECIFIED = 0;
+  // Exists in the tenant and can take new documents.
+  VENDOR_STATUS_ACTIVE = 1;
+  // Exists in the tenant but is archived: no new documents.
+  VENDOR_STATUS_ARCHIVED = 2;
+  // The tenant has no vendor with this id.
+  VENDOR_STATUS_NOT_FOUND = 3;
+}

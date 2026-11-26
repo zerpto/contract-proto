@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+// OWNED BY THE ORDER SERVICE. Order owns purchase and sales orders; other
+// services (fulfillment first) store the plain UUID and ask for what they need.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `po-`, `pol-`, `so-`,
+//     `sol-` and `ten-` prefixes exist only on HTTP and never appear here.
+//   - An unknown id is a normal answer, not a "not found" error. gRPC status
+//     codes are for infrastructure failures only, and a caller must fail closed
+//     on those.
+//   - Nothing here changes an order. A service that receives or delivers goods
+//     reports it with an event, and order moves the order's status itself.
+package zerpto.order.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Reads of a tenant's purchase orders.
+service PurchaseOrders {
+  // The purchase order lines of a tenant among the ids asked for, each with
+  // what its order is, so a goods receipt can be checked in one call. Answered
+  // from live data, locks nothing and changes nothing.
+  rpc BatchGetPurchaseOrderLines(BatchGetPurchaseOrderLinesRequest) returns (BatchGetPurchaseOrderLinesResponse);
+
+  // Whole purchase orders of a tenant, with their lines, to show them next to
+  // the documents made from them. Answered from live data and changes nothing.
+  rpc BatchGetPurchaseOrders(BatchGetPurchaseOrdersRequest) returns (BatchGetPurchaseOrdersResponse);
+}
+
+// Asks about several purchase order lines.
+message BatchGetPurchaseOrderLinesRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUIDs of the purchase order lines, without duplicates. At most 500.
+  // They can belong to different orders.
+  repeated string line_ids = 2;
+}
+
+// The lines found.
+message BatchGetPurchaseOrderLinesResponse {
+  // One entry per id the tenant has, in no particular order. An id the tenant
+  // does not have is left out.
+  repeated PurchaseOrderLineRef lines = 1;
+}
+
+// One purchase order line together with the facts of its order that decide
+// whether goods can be received against it.
+message PurchaseOrderLineRef {
+  // Plain UUID of the line.
+  string line_id = 1;
+  // Plain UUID of the order the line is on.
+  string purchase_order_id = 2;
+  // Status of that order now. Goods can be received only while it is
+  // PURCHASE_ORDER_STATUS_APPROVED or
+  // PURCHASE_ORDER_STATUS_PARTIALLY_RECEIVED.
+  PurchaseOrderStatus status = 3;
+  // Plain UUID of the vendor of that order (owned by partner).
+  string vendor_id = 4;
+  // Plain UUID of the item ordered (owned by inventory). Absent for a line
+  // without an item.
+  optional string item_id = 5;
+  // Quantity ordered, a decimal string with two decimals, for example
+  // "100.00". What has already been received is not subtracted.
+  string quantity = 6;
+  // Price of the whole line before tax, a decimal string with two decimals in
+  // `currency`. Divided by `quantity` it is the unit cost the goods come in at.
+  string line_subtotal = 7;
+  // ISO 4217 code of the order's currency, for example "IDR".
+  string currency = 8;
+}
+
+// Asks for several purchase orders.
+message BatchGetPurchaseOrdersRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUIDs of the purchase orders, without duplicates. At most 100.
+  repeated string purchase_order_ids = 2;
+}
+
+// The orders found.
+message BatchGetPurchaseOrdersResponse {
+  // One entry per id the tenant has, in no particular order. An id the tenant
+  // does not have is left out.
+  repeated PurchaseOrder purchase_orders = 1;
+}
+
+// A purchase order with its lines and totals. Amounts are in `currency`.
+message PurchaseOrder {
+  // Plain UUID of the order.
+  string purchase_order_id = 1;
+  // Document number, unique in the tenant, for example "PO-2026-00017".
+  string number = 2;
+  // Plain UUID of the vendor (owned by partner).
+  string vendor_id = 3;
+  // Where the order stands.
+  PurchaseOrderStatus status = 4;
+  // Date of the order, `YYYY-MM-DD`.
+  string order_date = 5;
+  // Date the goods are expected, `YYYY-MM-DD`. Absent when not given.
+  optional string expected_date = 6;
+  // ISO 4217 code of the order's currency, for example "IDR".
+  string currency = 7;
+  // Free text on the order. Absent when there is none.
+  optional string notes = 8;
+  // The lines, in the order they are shown.
+  repeated PurchaseOrderLine lines = 9;
+  // Sum of the lines before tax, a decimal string with two decimals.
+  string subtotal = 10;
+  // Sum of the line taxes, a decimal string with two decimals.
+  string tax_total = 11;
+  // `subtotal` plus `tax_total`, a decimal string with two decimals.
+  string total = 12;
+  // Down payments paid against the order, a decimal string with two decimals.
+  string down_payment_paid = 13;
+  // Part of the down payments not yet applied to bills, a decimal string with
+  // two decimals.
+  string down_payment_balance = 14;
+  // Plain UUID of the approval request (owned by IAM). Absent when the order
+  // never went to approval.
+  optional string approval_id = 15;
+  // Plain UUID of the request for quotation the order was made from (owned by
+  // quotation). Absent for an order written directly.
+  optional string rfq_id = 16;
+  // When the order was created.
+  google.protobuf.Timestamp created_at = 17;
+  // When the order was last changed.
+  google.protobuf.Timestamp updated_at = 18;
+}
+
+// A line of a purchase order.
+message PurchaseOrderLine {
+  // Plain UUID of the line.
+  string line_id = 1;
+  // Plain UUID of the item (owned by inventory). Absent for a line without an
+  // item.
+  optional string item_id = 2;
+  // What is ordered, in words.
+  string description = 3;
+  // Quantity ordered, a decimal string with two decimals.
+  string quantity = 4;
+  // Price of one unit before tax, a decimal string with two decimals.
+  string unit_price = 5;
+  // Plain UUID of the tax rate (owned by tax). Absent when the line has none.
+  optional string tax_rate_id = 6;
+  // Plain UUID of the account the line is booked to (owned by accounting).
+  string account_id = 7;
+  // Price of the line before tax, a decimal string with two decimals.
+  string line_subtotal = 8;
+  // Tax on the line, a decimal string with two decimals.
+  string line_tax = 9;
+  // `line_subtotal` plus `line_tax`, a decimal string with two decimals.
+  string line_total = 10;
+  // Quantity received as far as order has been told, a decimal string with two
+  // decimals. It follows events, so it can lag behind a receipt just posted.
+  string received_quantity = 11;
+  // Quantity billed as far as order has been told, a decimal string with two
+  // decimals.
+  string billed_quantity = 12;
+}
+
+// Where a purchase order stands.
+enum PurchaseOrderStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  PURCHASE_ORDER_STATUS_UNSPECIFIED = 0;
+  // Being written; takes no goods.
+  PURCHASE_ORDER_STATUS_DRAFT = 1;
+  // Waiting for approval; takes no goods.
+  PURCHASE_ORDER_STATUS_PENDING_APPROVAL = 2;
+  // Approved; goods can be received.
+  PURCHASE_ORDER_STATUS_APPROVED = 3;
+  // Some goods have arrived; more can be received.
+  PURCHASE_ORDER_STATUS_PARTIALLY_RECEIVED = 4;
+  // Everything ordered has arrived; takes no more goods.
+  PURCHASE_ORDER_STATUS_RECEIVED = 5;
+  // Ended before everything arrived; takes no more goods.
+  PURCHASE_ORDER_STATUS_CLOSED = 6;
+  // Cancelled; takes no goods.
+  PURCHASE_ORDER_STATUS_CANCELLED = 7;
+}

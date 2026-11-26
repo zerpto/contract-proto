@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+// OWNED BY THE BILLING SERVICE. Billing owns plans, subscriptions, seats and the
+// feature catalogue; other services (IAM first) only ask what a tenant is
+// entitled to and apply the rules themselves. Billing never reads IAM data
+// (owners, members, roles): that would make the two services depend on each
+// other.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `ten-` and `usr-`
+//     prefixes exist only on HTTP and never appear here.
+//   - A tenant that has never bought or trialed anything is on the free plan.
+//     That is a normal answer, not a "not found" error.
+//   - gRPC status codes are for infrastructure failures only (UNAVAILABLE,
+//     INTERNAL). A caller must fail closed on those and must not read them as
+//     "the tenant is free" or "the tenant is paid".
+package zerpto.billing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// What a tenant's billing state lets it do.
+service Entitlements {
+  // The billing state of one tenant: its status, whether paid features are
+  // locked and how many seats it may use. Answered from live data and changes
+  // nothing.
+  rpc GetTenantEntitlements(GetTenantEntitlementsRequest) returns (GetTenantEntitlementsResponse);
+
+  // Whether a person may still start their one free trial. It is about the
+  // person, not a tenant, so it works before they have a tenant. Changes
+  // nothing.
+  rpc GetTrialAvailability(GetTrialAvailabilityRequest) returns (GetTrialAvailabilityResponse);
+
+  // The feature catalogue: every permission key with the lowest plan that
+  // includes it and whether it reads or writes. Callers combine it with
+  // `GetTenantEntitlements` to decide what a user may really do. It is the
+  // same for every tenant.
+  rpc ListFeatures(ListFeaturesRequest) returns (ListFeaturesResponse);
+}
+
+message GetTenantEntitlementsRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+}
+
+message GetTenantEntitlementsResponse {
+  // Where the tenant is in its billing life.
+  SubscriptionStatus status = 1;
+  // True when paid features are locked: the tenant is on the free plan or
+  // overdue. IAM then drops paid permissions and makes everyone except the
+  // owner read-only.
+  bool paid_features_locked = 2;
+  // How many seats (active users) the tenant may use: 1 when free, the trial
+  // allowance during a trial, the seats bought otherwise. IAM refuses an
+  // invitation or reactivation when every seat is used.
+  int64 seat_limit = 3;
+  // When the running trial ends. Set only while `status` is
+  // SUBSCRIPTION_STATUS_TRIAL.
+  google.protobuf.Timestamp trial_ends_at = 4;
+}
+
+message GetTrialAvailabilityRequest {
+  // Plain UUID of the user.
+  string user_id = 1;
+}
+
+message GetTrialAvailabilityResponse {
+  // True when the user has not used their one trial.
+  bool available = 1;
+}
+
+message ListFeaturesRequest {}
+
+message ListFeaturesResponse {
+  // Every feature, in display order.
+  repeated Feature features = 1;
+}
+
+// One permission key and the plan it needs.
+message Feature {
+  // The permission key, for example "bank.read" or "bank.manage". Matches the
+  // keys IAM stores on roles.
+  string key = 1;
+  // Short display name, for example "Bank reconciliation (view)".
+  string name = 2;
+  // One sentence saying what the permission allows.
+  string description = 3;
+  // The lowest plan that includes this feature.
+  MinimumPlan minimum_plan = 4;
+  // Whether the permission only reads or also changes data. A read-only user
+  // loses every FEATURE_KIND_WRITE permission.
+  FeatureKind kind = 5;
+  // Display order, ascending.
+  int32 position = 6;
+}
+
+// A tenant's billing status.
+enum SubscriptionStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
+  // Basic features and one seat. A tenant with no subscription is free.
+  SUBSCRIPTION_STATUS_FREE = 1;
+  // Every feature for a few seats, no card, for a limited time.
+  SUBSCRIPTION_STATUS_TRIAL = 2;
+  // Every feature for the seats bought.
+  SUBSCRIPTION_STATUS_PAID = 3;
+  // A renewal went unpaid. Back to the basic features; only a payment moves it
+  // back to paid.
+  SUBSCRIPTION_STATUS_OVERDUE = 4;
+}
+
+// The lowest plan that includes a feature.
+enum MinimumPlan {
+  // Never sent on purpose. Treat it as an error in the server.
+  MINIMUM_PLAN_UNSPECIFIED = 0;
+  // Included in every plan, including free.
+  MINIMUM_PLAN_FREE = 1;
+  // Needs a trial or a paid plan; locked when the tenant is free or overdue.
+  MINIMUM_PLAN_PAID = 2;
+}
+
+// Whether a permission reads or writes.
+enum FeatureKind {
+  // Never sent on purpose. Treat it as an error in the server.
+  FEATURE_KIND_UNSPECIFIED = 0;
+  // Only reads data.
+  FEATURE_KIND_READ = 1;
+  // Creates or changes data.
+  FEATURE_KIND_WRITE = 2;
+}

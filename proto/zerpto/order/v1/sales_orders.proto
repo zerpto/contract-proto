@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+// OWNED BY THE ORDER SERVICE. See `purchase_orders.proto` for the conventions of
+// this package.
+package zerpto.order.v1;
+
+// Reads of a tenant's sales orders.
+service SalesOrders {
+  // One sales order of a tenant with its status and lines, so a delivery can be
+  // checked against it. Answered from live data, locks nothing and changes
+  // nothing.
+  rpc GetSalesOrder(GetSalesOrderRequest) returns (GetSalesOrderResponse);
+}
+
+// Asks about one sales order.
+message GetSalesOrderRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // Plain UUID of the sales order.
+  string sales_order_id = 2;
+}
+
+// The order, if the tenant has it.
+message GetSalesOrderResponse {
+  // Absent when the tenant has no sales order with this id.
+  SalesOrder sales_order = 1;
+}
+
+// What a caller needs to know about a sales order.
+message SalesOrder {
+  // Plain UUID of the order.
+  string sales_order_id = 1;
+  // Where the order stands. Goods can be delivered only while it is
+  // SALES_ORDER_STATUS_CONFIRMED or SALES_ORDER_STATUS_PARTIALLY_DELIVERED.
+  SalesOrderStatus status = 2;
+  // All lines of the order, in the order they are shown.
+  repeated SalesOrderLine lines = 3;
+}
+
+// A line of a sales order.
+message SalesOrderLine {
+  // Plain UUID of the line.
+  string line_id = 1;
+  // Plain UUID of the item (owned by inventory). Absent for a line without an
+  // item.
+  optional string item_id = 2;
+  // Quantity ordered, a decimal string with two decimals, for example "50.00".
+  // What has already been delivered is not subtracted.
+  string quantity = 3;
+}
+
+// Where a sales order stands.
+enum SalesOrderStatus {
+  // Never sent on purpose. Treat it as an error in the server.
+  SALES_ORDER_STATUS_UNSPECIFIED = 0;
+  // Being written; nothing can be delivered.
+  SALES_ORDER_STATUS_DRAFT = 1;
+  // Confirmed; goods can be delivered.
+  SALES_ORDER_STATUS_CONFIRMED = 2;
+  // Some goods have left; more can be delivered.
+  SALES_ORDER_STATUS_PARTIALLY_DELIVERED = 3;
+  // Everything ordered has left; nothing more can be delivered.
+  SALES_ORDER_STATUS_DELIVERED = 4;
+  // Invoiced; nothing more can be delivered.
+  SALES_ORDER_STATUS_INVOICED = 5;
+  // Cancelled; nothing can be delivered.
+  SALES_ORDER_STATUS_CANCELLED = 6;
+}

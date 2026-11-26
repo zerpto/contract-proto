@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+// OWNED BY THE REFERENCE-DATA SERVICE. Reference-data owns the region tree and
+// the rule for how deep an address must reach; every other service (IAM,
+// warehouses, partners) only asks and never repeats the rule.
+//
+// Conventions for this package:
+//   - Ids are plain UUIDs (lowercase 8-4-4-4-12). The `reg-` prefix exists only
+//     on HTTP and never appears here.
+//   - A bad address is a normal answer, carried in `Outcome`. It is never a
+//     gRPC error status.
+//   - gRPC status codes are for infrastructure failures only (UNAVAILABLE,
+//     INTERNAL). A caller can retry those, and must not read them as "the
+//     address is wrong".
+package zerpto.referencedata.v1;
+
+// The region tree: countries, then provinces, districts, sub-districts and
+// villages. Used to check and complete an address.
+service Regions {
+  // Checks an address against the region tree and fills in the region fields.
+  // Whether the address is acceptable is answered in `outcome`; a region that
+  // does not exist or is not deep enough is a normal answer, not a gRPC error.
+  // This call changes nothing.
+  rpc ResolveAddress(ResolveAddressRequest) returns (ResolveAddressResponse);
+}
+
+// What the caller knows about the address's place in the tree.
+message ResolveAddressRequest {
+  // Plain UUID of the deepest region the user picked. Empty when the address
+  // was typed by hand (a country without region data).
+  string region_id = 1;
+  // Country as ISO 3166-1 alpha-2, for example "ID". Needed when `region_id`
+  // is empty; ignored when `region_id` is set, because the country is taken
+  // from the region.
+  string country = 2;
+}
+
+// The checked address. Fields 2 to 7 are set only when `outcome` is
+// OUTCOME_OK; for any other outcome they are empty.
+message ResolveAddressResponse {
+  // Whether the address is acceptable, and if not, why.
+  Outcome outcome = 1;
+  // ISO 3166-1 alpha-2 code, taken from the region when `region_id` was given.
+  string country = 2;
+  // Name of the province, taken from the picked region or the one above it.
+  // Empty for a level the tree does not reach.
+  string province = 3;
+  // Name of the district. Empty for a level the tree does not reach.
+  string district = 4;
+  // Name of the sub-district. Empty for a level the tree does not reach.
+  string sub_district = 5;
+  // Name of the village. Empty for a level the tree does not reach.
+  string village = 6;
+  // Postal code recorded on the region, or empty when no region in the chain
+  // has one.
+  string postal_code = 7;
+}
+
+// The result of checking an address. Everything except OUTCOME_OK means the
+// address must be refused; the caller maps it to its own error.
+enum Outcome {
+  // Never sent on purpose. Treat it as an error in the server.
+  OUTCOME_UNSPECIFIED = 0;
+  // The address is acceptable and the region fields are filled in.
+  OUTCOME_OK = 1;
+  // `region_id` is not the id of any region (including a malformed id).
+  OUTCOME_UNKNOWN_REGION = 2;
+  // The country has region data, so the address must carry a `region_id`, but
+  // none was given.
+  OUTCOME_REGION_REQUIRED = 3;
+  // The region exists but is shallower than its country requires (for example
+  // a district where the sub-district is needed).
+  OUTCOME_REGION_TOO_SHALLOW = 4;
+  // No `region_id` and no usable `country`: the country is empty or unknown.
+  OUTCOME_COUNTRY_REQUIRED = 5;
+}

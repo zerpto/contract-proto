@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+// OWNED BY THE INVENTORY SERVICE. See `items.proto` for the conventions of this
+// package.
+package zerpto.inventory.v1;
+
+// Changes to what a tenant holds, made for another service's documents.
+service StockPostings {
+  // Applies the stock movements of one source document (a goods receipt or a
+  // delivery) to one warehouse, all of them or none, and for a receipt updates
+  // the items' average cost.
+  //
+  // Safe to retry. The source (`tenant_id`, `source_type`, `source_id`) is
+  // applied at most once, also under concurrent calls. Once it has been applied,
+  // repeating the same request changes nothing and returns the first response,
+  // however stock has moved since. A different request for an applied source
+  // changes nothing and answers STOCK_POSTING_OUTCOME_SOURCE_CONFLICT. A
+  // refused call records nothing, so the same source can be posted later, for
+  // example after stock arrives.
+  //
+  // Lines of items that are not stocked move nothing and are not an error, so
+  // the caller sends every line that has an item. When the call fails with a
+  // gRPC error the caller cannot know whether it was applied, and repeats the
+  // same request to find out.
+  rpc PostStockMovements(PostStockMovementsRequest) returns (PostStockMovementsResponse);
+}
+
+// The movements of one source document. A request that breaks a rule written on
+// its fields is a caller bug, answered with INVALID_ARGUMENT.
+message PostStockMovementsRequest {
+  // Plain UUID of the tenant.
+  string tenant_id = 1;
+  // What kind of document moves the stock. Must not be unspecified.
+  StockSourceType source_type = 2;
+  // Plain UUID of that document, owned by the caller.
+  string source_id = 3;
+  // Date of the movements, `YYYY-MM-DD`: the received or delivery date.
+  // Inventory does not check the accounting period; the caller does.
+  string date = 4;
+  // Plain UUID of the warehouse the stock enters or leaves. An archived
+  // warehouse is accepted: refusing it on new documents is the caller's job.
+  string warehouse_id = 5;
+  // The movements, applied in this order. At most 500, and they cannot be split
+  // over several calls. An item can appear more than once. An empty list is
+  // accepted and moves nothing.
+  repeated StockMovementLine lines = 6;
+}
+
+// One movement asked for.
+message StockMovementLine {
+  // Plain UUID of the item.
+  string item_id = 1;
+  // Signed quantity in the item's base unit, a decimal string with two
+  // decimals, never zero. Positive adds stock and negative takes it. A goods
+  // receipt sends only positive ones ("60.00"), a delivery only negative ones
+  // ("-30.00").
+  string quantity = 2;
+  // What one unit cost before tax, in the tenant's base currency, a decimal
+  // string with four decimals (rounded half to even), never negative. Only for
+  // a goods receipt: inventory folds it into the item's average cost, taken over
+  // the quantity of all warehouses held before this line. Absent leaves the
+  // average cost as it is. Must be absent on a delivery.
+  optional string unit_cost = 3;
+}
+
+// What happened to the movements.
+message PostStockMovementsResponse {
+  // Whether the movements are applied, and if not, why.
+  StockPostingOutcome outcome = 1;
+  // What was applied, one per request line of a stocked item, in request order.
+  // Set only when `outcome` is STOCK_POSTING_OUTCOME_POSTED.
+  repeated PostedStockMovement movements = 2;
+  // The items the warehouse holds too little of, one per item. Set only when
+  // `outcome` is STOCK_POSTING_OUTCOME_INSUFFICIENT_STOCK.
+  repeated StockShortage shortages = 3;
+  // Plain UUIDs of the items the tenant does not have. Set only when `outcome`
+  // is STOCK_POSTING_OUTCOME_UNKNOWN_ITEM.
+  repeated string unknown_item_ids = 4;
+}
+
+// One movement that was applied.
+message PostedStockMovement {
+  // Plain UUID of the item.
+  string item_id = 1;
+  // Signed quantity applied, a decimal string with two decimals.
+  string quantity = 2;
+  // Cost of one unit this movement is valued at, in the tenant's base currency,
+  // a decimal string with four decimals: the cost sent on a receipt, the
+  // average cost at the time of posting on a delivery. Absent when inventory has
+  // no cost for it.
+  optional string unit_cost = 3;
+  // `quantity` times `unit_cost`, signed like `quantity`, a decimal string with
+  // two decimals (rounded half to even). Absent when `unit_cost` is absent.
+  optional string value = 4;
+}
+
+// An item the warehouse holds too little of.
+message StockShortage {
+  // Plain UUID of the item.
+  string item_id = 1;
+  // Quantity the request takes of the item over all its lines, as a positive
+  // decimal string with two decimals.
+  string requested_quantity = 2;
+  // Quantity the warehouse holds, a decimal string with two decimals. It can be
+  // negative.
+  string on_hand_quantity = 3;
+}
+
+// The kind of document that moves stock.
+enum StockSourceType {
+  // Not a valid source; a request with it is refused as a caller bug.
+  STOCK_SOURCE_TYPE_UNSPECIFIED = 0;
+  // A goods receipt of the fulfillment service. Adds stock.
+  STOCK_SOURCE_TYPE_GOODS_RECEIPT = 1;
+  // A delivery of the fulfillment service. Takes stock.
+  STOCK_SOURCE_TYPE_DELIVERY = 2;
+}
+
+// What happened to a stock posting. Everything except
+// STOCK_POSTING_OUTCOME_POSTED means this call changed nothing.
+enum StockPostingOutcome {
+  // Never sent on purpose. Treat it as an error in the server.
+  STOCK_POSTING_OUTCOME_UNSPECIFIED = 0;
+  // The movements are applied, by this call or by an earlier identical one.
+  STOCK_POSTING_OUTCOME_POSTED = 1;
+  // The warehouse holds less of a stocked item than the request takes.
+  STOCK_POSTING_OUTCOME_INSUFFICIENT_STOCK = 2;
+  // The tenant has no warehouse with this id.
+  STOCK_POSTING_OUTCOME_UNKNOWN_WAREHOUSE = 3;
+  // The tenant does not have one of the items.
+  STOCK_POSTING_OUTCOME_UNKNOWN_ITEM = 4;
+  // This source was already applied with a different date, warehouse or lines.
+  // The caller must not treat its document as posted as it stands.
+  STOCK_POSTING_OUTCOME_SOURCE_CONFLICT = 5;
+}

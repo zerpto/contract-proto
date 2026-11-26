@@ -1,0 +1,12 @@
+# Rust build output
+target/
+Cargo.lock
+
+# Local env and OS/editor files
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/
+*.log
+.claude/
